@@ -8,6 +8,8 @@ La aplicación permite:
 - **inscribir** estudiantes en cursos: un estudiante puede tomar n cursos y un curso puede tener n estudiantes (relación **muchos a muchos**);
 - **registrarse, iniciar sesión y cerrar sesión** con **JWT** (access token) y **refresh tokens** en una cookie segura. Todos los endpoints de estudiantes, cursos e inscripciones exigen un token.
 
+El proyecto incluye un **`docker-compose.yml`** que levanta **dos contenedores**: la API (`sistema_academico_app`) y PostgreSQL (`sistema_academico_db`). Con `docker compose up --build` queda todo funcionando, sin instalar Python ni PostgreSQL en tu PC.
+
 ---
 
 ## Tecnologías
@@ -70,6 +72,68 @@ El archivo `.env` contiene credenciales y el secreto que firma los tokens: está
 
 ---
 
+## Docker Compose: un archivo, dos contenedores
+
+`docker-compose.yml` define dos **servicios**. Al ejecutar `docker compose up --build`, Docker crea un contenedor por cada uno, más una red y un volumen:
+
+```text
+                 Tu PC
+   ┌───────────────────────────────────────────────────────┐
+   │  Navegador / Swagger          Alembic, psql, DBeaver   │
+   │  http://localhost:8080        localhost:5433           │
+   └──────────┬──────────────────────────────┬──────────────┘
+              │ 8080 → 8000                  │ 5433 → 5432
+   ┌──────────▼──────────────┐     ┌─────────▼───────────────┐
+   │ servicio app            │     │ servicio db             │
+   │ sistema_academico_app   │────▶│ sistema_academico_db    │
+   │ FastAPI + Uvicorn       │ db: │ PostgreSQL 17           │
+   │ (imagen del Dockerfile) │5432 │ (imagen postgres:17)    │
+   └─────────────────────────┘     └─────────┬───────────────┘
+        red interna de Docker                │
+                                   ┌─────────▼───────────────┐
+                                   │ volumen pgdata          │
+                                   │ (los datos persisten)   │
+                                   └─────────────────────────┘
+```
+
+| | Servicio `db` | Servicio `app` |
+|---|---|---|
+| **Contenedor** | `sistema_academico_db` | `sistema_academico_app` |
+| **Imagen** | `postgres:17` (oficial, se descarga) | Se construye con el `Dockerfile` del proyecto |
+| **Puerto en tu PC → contenedor** | `5433 → 5432` (`DB_PORT_HOST`) | `8080 → 8000` (`APP_PORT`) |
+| **Configuración** | `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` desde el `.env` | `DB_*`, `JWT_SECRET`, `ACCESS_TOKEN_MINUTOS`, `REFRESH_TOKEN_DIAS`, `COOKIE_SECURE` desde el `.env` |
+| **Datos** | Volumen `pgdata`: sobreviven a `docker compose down` | No guarda datos: todo va a la base |
+| **Al arrancar** | `healthcheck` con `pg_isready` cada 5 segundos | Espera a que `db` esté sano (`depends_on: condition: service_healthy`), ejecuta `alembic upgrade head` y levanta Uvicorn |
+
+Cómo se conectan:
+
+- **La API habla con la base por la red interna de Docker.** Ahí la base se llama `db` y escucha en el 5432, por eso el compose le pasa `DB_HOST: db` y `DB_PORT: 5432` a la API, aunque tu `.env` diga `localhost` y `5433`.
+- **Desde tu PC entras por los puertos publicados:** `localhost:8080` para la API y `localhost:5433` para la base. Se usa el 5433 para no chocar con un PostgreSQL instalado localmente en el 5432.
+- **El `.env` no entra a la imagen** (está en `.dockerignore`): compose lo lee al arrancar y reemplaza cada `${VARIABLE}` antes de crear los contenedores. Si falta `JWT_SECRET`, se detiene con `Falta JWT_SECRET en el archivo .env`.
+
+El `Dockerfile` construye la imagen de la API en **dos etapas**:
+
+1. **builder**: parte de la imagen de `uv` con Python 3.14, instala las herramientas para compilar `psycopg2` y ejecuta `uv sync --frozen --no-dev` a partir de `uv.lock`.
+2. **imagen final**: parte de `python:3.14-slim`, instala solo `libpq5`, copia el entorno virtual ya armado y el código. Así la imagen final no lleva compiladores.
+
+Comandos útiles:
+
+| Comando | Qué hace |
+|---|---|
+| `docker compose up --build` | Construye la imagen de la API y levanta los dos contenedores. |
+| `docker compose up -d` | Levanta los contenedores en segundo plano, sin reconstruir. |
+| `docker compose up -d --build` | Reconstruye la imagen: necesario después de cambiar código, dependencias o migraciones. |
+| `docker compose up -d db` | Levanta solo la base de datos (para correr la API o Alembic desde tu PC). |
+| `docker compose ps` | Muestra los dos contenedores y su estado. |
+| `docker compose logs -f app` | Muestra los logs de la API. |
+| `docker compose exec db psql -U alumno -d clase` | Abre una consola de PostgreSQL dentro del contenedor `db`. |
+| `docker compose down` | Detiene y elimina los contenedores y la red (los datos se conservan en el volumen). |
+| `docker compose down -v` | Igual, pero borra también el volumen con los datos de PostgreSQL. |
+
+Todos los comandos se ejecutan desde la carpeta que tiene `docker-compose.yml`.
+
+---
+
 ## Ejecutar la API
 
 ### Opción 1: con Docker (recomendada)
@@ -78,29 +142,15 @@ El archivo `.env` contiene credenciales y el secreto que firma los tokens: está
 docker compose up --build
 ```
 
-Compose levanta dos contenedores:
+Levanta los dos contenedores, `sistema_academico_db` y `sistema_academico_app`, explicados en [Docker Compose: un archivo, dos contenedores](#docker-compose-un-archivo-dos-contenedores). Swagger queda en `http://localhost:8080/docs` y ReDoc en `http://localhost:8080/redoc`.
 
-| Contenedor | Puerto en tu PC | Qué es |
-|---|---|---|
-| `sistema_academico_app` | `8080` | La API. Al arrancar aplica las migraciones (`alembic upgrade head`) y luego inicia Uvicorn. |
-| `sistema_academico_db` | `5433` | PostgreSQL 17. Usa el 5433 para no chocar con un PostgreSQL local en el 5432. |
+Para comprobar que ambos están corriendo:
 
-Swagger queda en `http://localhost:8080/docs` y ReDoc en `http://localhost:8080/redoc`.
+```bash
+docker compose ps
+```
 
-Si falta `JWT_SECRET` en el `.env`, compose se detiene con el mensaje `Falta JWT_SECRET en el archivo .env`: es intencional, así la API nunca firma tokens con un secreto vacío.
-
-Comandos útiles:
-
-| Comando | Qué hace |
-|---|---|
-| `docker compose up -d` | Levanta los contenedores en segundo plano, sin reconstruir. |
-| `docker compose up -d --build` | Reconstruye la imagen: necesario después de cambiar código o dependencias. |
-| `docker compose logs -f app` | Muestra los logs de la API. |
-| `docker compose down` | Detiene y elimina los contenedores (los datos se conservan). |
-| `docker compose down -v` | Igual, pero borra también los datos de PostgreSQL. |
-| `docker compose exec db psql -U alumno -d clase` | Abre una consola de PostgreSQL dentro del contenedor. |
-
-El `.env` no entra a la imagen (está en `.dockerignore`): compose lo lee y le pasa las variables al contenedor. Dentro de la red de Docker la base de datos se llama `db` y escucha en el 5432.
+Debe mostrar `sistema_academico_app` como `Up` y `sistema_academico_db` como `Up (healthy)`.
 
 ### Opción 2: sin Docker
 
