@@ -1,7 +1,7 @@
 [project]
 name = "sistema-academico"
 version = "0.1.0"
-requires-python = ">=3.14"
+requires-python = "==3.14.*"
 dependencies = [
     "alembic>=1.16.0",
     "fastapi>=0.141.1",

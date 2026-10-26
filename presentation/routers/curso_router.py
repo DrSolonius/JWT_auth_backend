@@ -11,7 +11,7 @@ from fastapi import (
 )
 
 from application.services.curso_service import CursoService
-from presentation.dependencies import get_curso_service
+from presentation.dependencies import get_curso_service, get_usuario_actual
 from presentation.schemas.dtos.curso_dto import (
     CursoCreateDTO,
     CursoUpdateDTO,
@@ -27,6 +27,7 @@ from presentation.schemas.dtos.curso_query_dto import (
 router = APIRouter(
     prefix="/cursos",
     tags=["Cursos"],
+    dependencies=[Depends(get_usuario_actual)],
 )
 
 # El servicio se construye por solicitud con su propia sesión de base de datos.
