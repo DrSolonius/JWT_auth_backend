@@ -27,6 +27,11 @@ services:
       DB_NAME: ${DB_NAME:-clase}
       DB_USER: ${DB_USER:-alumno}
       DB_PASSWORD: ${DB_PASSWORD:-mi_clave_segura}
+      # Autenticación. Sin JWT_SECRET en el .env, compose se detiene con este mensaje.
+      JWT_SECRET: ${JWT_SECRET:?Falta JWT_SECRET en el archivo .env}
+      ACCESS_TOKEN_MINUTOS: ${ACCESS_TOKEN_MINUTOS:-15}
+      REFRESH_TOKEN_DIAS: ${REFRESH_TOKEN_DIAS:-7}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
     ports:
       - "${APP_PORT:-8080}:8000"
     depends_on:
