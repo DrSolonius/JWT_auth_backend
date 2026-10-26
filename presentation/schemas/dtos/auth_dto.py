@@ -8,7 +8,7 @@ class RegistroDTO(BaseModel):
     )
 
     email: str = Field(min_length=3, max_length=254)
-    password: SecretStr = Field(min_length=12, max_length=128)
+    password: SecretStr = Field(min_length=4, max_length=128)
 
 
 class LoginDTO(BaseModel):
