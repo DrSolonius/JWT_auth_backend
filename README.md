@@ -5,7 +5,8 @@ Proyecto educativo para aprender a construir una API HTTP con **FastAPI**, organ
 La aplicación permite:
 
 - crear, consultar, actualizar, eliminar y listar **estudiantes** y **cursos** con paginación;
-- **inscribir** estudiantes en cursos: un estudiante puede tomar n cursos y un curso puede tener n estudiantes (relación **muchos a muchos**).
+- **inscribir** estudiantes en cursos: un estudiante puede tomar n cursos y un curso puede tener n estudiantes (relación **muchos a muchos**);
+- **registrarse, iniciar sesión y cerrar sesión** con **JWT** (access token) y **refresh tokens** en una cookie segura. Todos los endpoints de estudiantes, cursos e inscripciones exigen un token.
 
 ---
 
@@ -18,19 +19,20 @@ La aplicación permite:
 | Pydantic | DTO y validación |
 | SQLAlchemy 2.1 | ORM (modelos, sesiones, consultas) |
 | psycopg2 | Driver de PostgreSQL |
-| PostgreSQL | Base de datos |
+| PostgreSQL 17 | Base de datos |
 | Alembic | Migraciones del esquema |
 | python-dotenv | Lectura de la configuración desde `.env` |
+| pwdlib[argon2] | Hash de contraseñas con Argon2id |
+| PyJWT | Crear, firmar y validar los access tokens (JWT) |
+| Docker + Docker Compose | Levantar la API y PostgreSQL con un solo comando |
 | uv | Gestión de dependencias y entorno virtual |
 
 ---
 
 ## Requisitos
 
-- Python 3.14 o superior.
-- `uv` instalado.
+- Docker Desktop (recomendado), **o** Python 3.14 + `uv` + un PostgreSQL local.
 - Git.
-- PostgreSQL corriendo localmente, con una base de datos creada para el proyecto.
 
 ---
 
@@ -39,70 +41,93 @@ La aplicación permite:
 Clona el repositorio:
 
 ```bash
-git clone https://github.com/DrSolonius/backend_S4.git
-cd backend_S4
+git clone https://github.com/DrSolonius/JWT_auth_backend.git
+cd JWT_auth_backend
 ```
 
-Instala las dependencias:
-
-```bash
-uv sync
-```
-
-Configura la conexión a PostgreSQL copiando `.env.example` como `.env` y completando tus datos:
+Copia `.env.example` como `.env` y completa tus datos:
 
 ```text
 DB_HOST=localhost
-DB_PORT=5432
+DB_PORT=5433
 DB_NAME=clase
 DB_USER=alumno
 DB_PASSWORD=mi_clave_segura
+
+JWT_SECRET=pega-aqui-tu-secreto
+ACCESS_TOKEN_MINUTOS=15
+REFRESH_TOKEN_DIAS=7
+COOKIE_SECURE=false
 ```
 
-El archivo `.env` contiene credenciales: está en `.gitignore` y **no se sube al repositorio**.
-
-Crea las tablas aplicando las migraciones:
+Genera un `JWT_SECRET` propio (uno por persona y por entorno):
 
 ```bash
-uv run alembic upgrade head
+python -c "import secrets; print(secrets.token_urlsafe(64))"
 ```
+
+El archivo `.env` contiene credenciales y el secreto que firma los tokens: está en `.gitignore` y **no se sube al repositorio**. En `.env.example` el `JWT_SECRET` queda vacío a propósito.
 
 ---
 
 ## Ejecutar la API
 
-Desde la raíz del proyecto:
+### Opción 1: con Docker (recomendada)
 
 ```bash
+docker compose up --build
+```
+
+Compose levanta dos contenedores:
+
+| Contenedor | Puerto en tu PC | Qué es |
+|---|---|---|
+| `sistema_academico_app` | `8080` | La API. Al arrancar aplica las migraciones (`alembic upgrade head`) y luego inicia Uvicorn. |
+| `sistema_academico_db` | `5433` | PostgreSQL 17. Usa el 5433 para no chocar con un PostgreSQL local en el 5432. |
+
+Swagger queda en `http://localhost:8080/docs` y ReDoc en `http://localhost:8080/redoc`.
+
+Si falta `JWT_SECRET` en el `.env`, compose se detiene con el mensaje `Falta JWT_SECRET en el archivo .env`: es intencional, así la API nunca firma tokens con un secreto vacío.
+
+Comandos útiles:
+
+| Comando | Qué hace |
+|---|---|
+| `docker compose up -d` | Levanta los contenedores en segundo plano, sin reconstruir. |
+| `docker compose up -d --build` | Reconstruye la imagen: necesario después de cambiar código o dependencias. |
+| `docker compose logs -f app` | Muestra los logs de la API. |
+| `docker compose down` | Detiene y elimina los contenedores (los datos se conservan). |
+| `docker compose down -v` | Igual, pero borra también los datos de PostgreSQL. |
+| `docker compose exec db psql -U alumno -d clase` | Abre una consola de PostgreSQL dentro del contenedor. |
+
+El `.env` no entra a la imagen (está en `.dockerignore`): compose lo lee y le pasa las variables al contenedor. Dentro de la red de Docker la base de datos se llama `db` y escucha en el 5432.
+
+### Opción 2: sin Docker
+
+Instala las dependencias y aplica las migraciones contra tu PostgreSQL local (en el `.env`, `DB_PORT=5432`):
+
+```bash
+uv sync
+uv run alembic upgrade head
 uv run uvicorn app.main:app --reload
 ```
 
-Al iniciar, si la base de datos está vacía, los seeders cargan datos de prueba.
-
-Swagger:
-
-```text
-http://127.0.0.1:8000/docs
-```
-
-ReDoc:
-
-```text
-http://127.0.0.1:8000/redoc
-```
-
-Si el puerto está ocupado, puedes utilizar otro:
+Swagger queda en `http://127.0.0.1:8000/docs`. Si el puerto está ocupado:
 
 ```bash
 uv run uvicorn app.main:app --reload --port 8765
 ```
+
+También puedes correr la API en tu PC usando solo la base de datos de Docker: `docker compose up -d db` y `DB_PORT=5433` en el `.env`.
+
+Al iniciar, si la base de datos está vacía, los seeders cargan datos de prueba y el usuario administrador.
 
 ---
 
 ## Estructura del proyecto
 
 ```text
-backend_S4/
+JWT_auth_backend/
 ├── .vscode/
 │   ├── launch.json
 │   └── settings.json
@@ -112,61 +137,89 @@ backend_S4/
 │
 ├── application/
 │   └── services/
+│       ├── auth_service.py
 │       ├── curso_service.py
 │       ├── estudiante_service.py
 │       └── inscripcion_service.py
 │
 ├── domain/
 │   ├── curso.py
+│   ├── errores_auth.py
 │   ├── estudiante.py
-│   └── inscripcion.py
+│   ├── inscripcion.py
+│   ├── refresh_token.py
+│   └── usuario.py
 │
 ├── infrastructure/
 │   ├── database.py
 │   │
 │   ├── mappers/
 │   │   ├── curso_mapper.py
-│   │   └── estudiante_mapper.py
+│   │   ├── estudiante_mapper.py
+│   │   ├── refresh_token_mapper.py
+│   │   └── usuario_mapper.py
 │   │
 │   ├── models/
 │   │   ├── curso_model.py
 │   │   ├── estudiante_model.py
-│   │   └── inscripcion_model.py
+│   │   ├── inscripcion_model.py
+│   │   ├── refresh_token_model.py
+│   │   └── usuario_model.py
 │   │
 │   ├── repositories/
 │   │   ├── curso_repository.py
 │   │   ├── estudiante_repository.py
-│   │   └── inscripcion_repository.py
+│   │   ├── inscripcion_repository.py
+│   │   ├── refresh_token_repository.py
+│   │   └── usuario_repository.py
+│   │
+│   ├── security/
+│   │   ├── config.py
+│   │   ├── jwt_service.py
+│   │   ├── password_hasher.py
+│   │   └── refresh_token_util.py
 │   │
 │   └── seeders/
 │       ├── curso_seeder.py
 │       ├── estudiante_seeder.py
-│       └── inscripcion_seeder.py
+│       ├── inscripcion_seeder.py
+│       └── usuario_seeder.py
 │
 ├── migrations/
 │   ├── env.py
 │   ├── script.py.mako
 │   └── versions/
-│       └── 0001_crear_tablas.py
+│       ├── 0001_crear_tablas.py
+│       ├── 0002_eliminar_tabla_alumnos.py
+│       ├── 0003_crear_tabla_usuarios.py
+│       └── 0004_crear_tabla_refresh_tokens.py
 │
 ├── presentation/
 │   ├── dependencies.py
 │   │
 │   ├── routers/
+│   │   ├── auth_router.py
 │   │   ├── curso_router.py
 │   │   ├── estudiante_router.py
 │   │   └── inscripcion_router.py
 │   │
-│   └── schemas/
-│       └── dtos/
-│           ├── curso_dto.py
-│           ├── curso_query_dto.py
-│           ├── estudiante_dto.py
-│           └── estudiante_query_dto.py
+│   ├── schemas/
+│   │   └── dtos/
+│   │       ├── auth_dto.py
+│   │       ├── curso_dto.py
+│   │       ├── curso_query_dto.py
+│   │       ├── estudiante_dto.py
+│   │       └── estudiante_query_dto.py
+│   │
+│   └── security/
+│       └── cookies.py
 │
+├── .dockerignore
 ├── .env.example
 ├── .gitignore
 ├── alembic.ini
+├── docker-compose.yml
+├── Dockerfile
 ├── pyproject.toml
 ├── README.md
 └── uv.lock
@@ -178,16 +231,18 @@ backend_S4/
 
 | Componente | Responsabilidad |
 |---|---|
-| `app/main.py` | Crea la aplicación FastAPI, carga los datos iniciales y registra los routers. |
+| `app/main.py` | Crea la aplicación FastAPI, configura CORS, carga los datos iniciales y registra los routers. |
 | `presentation/routers` | Define los endpoints y recibe las solicitudes HTTP. |
 | `presentation/schemas/dtos` | Contiene los DTO implementados con Pydantic. |
-| `presentation/dependencies.py` | Abre una sesión de base de datos por solicitud y construye los servicios con `Depends`. |
-| `application/services` | Coordina los casos de uso y las reglas de aplicación. |
-| `domain` | Define las entidades `Estudiante`, `Curso` e `Inscripcion`, su estado y comportamiento. |
+| `presentation/dependencies.py` | Abre una sesión por solicitud, construye los servicios con `Depends` y define `get_usuario_actual`, que valida el token. |
+| `presentation/security/cookies.py` | Pone y borra la cookie del refresh token: las cookies son un detalle de HTTP. |
+| `application/services` | Coordina los casos de uso. `AuthService` registra, inicia sesión, renueva y cierra sesiones. |
+| `domain` | Entidades (`Estudiante`, `Curso`, `Inscripcion`, `Usuario`, `RefreshToken`), sus reglas y los errores de autenticación. |
 | `infrastructure/database.py` | Lee el `.env`, crea el `engine` de PostgreSQL, la `SessionLocal` y la clase `Base`. |
 | `infrastructure/models` | Modelos ORM: las tablas de la base de datos como clases de Python. |
 | `infrastructure/mappers` | Convierten entre entidades de dominio y modelos ORM. |
 | `infrastructure/repositories` | Guardan y recuperan datos usando una sesión de SQLAlchemy. |
+| `infrastructure/security` | Detalles técnicos de seguridad: configuración, hash de contraseñas, JWT y refresh tokens. |
 | `infrastructure/seeders` | Cargan datos iniciales para pruebas. |
 | `migrations` | Migraciones de Alembic que crean y modifican el esquema. |
 
@@ -198,19 +253,22 @@ backend_S4/
 ```text
 CLIENTE
    │
-   │ HTTP / JSON
+   │ HTTP / JSON  (Authorization: Bearer <token>)
    ▼
 ┌─────────────────────────────────┐
 │ PRESENTATION                    │
 │                                 │
 │ Routers + DTO / Pydantic        │
 │ Depends → sesión por solicitud  │
+│ get_usuario_actual → valida JWT │
+│ cookies.py → cookie del refresh │
 └────────────────┬────────────────┘
                  │
                  ▼
 ┌─────────────────────────────────┐
 │ APPLICATION                     │
 │                                 │
+│ AuthService                     │
 │ EstudianteService               │
 │ CursoService                    │
 │ InscripcionService              │
@@ -221,6 +279,7 @@ CLIENTE
 │ DOMAIN                          │
 │                                 │
 │ Estudiante, Curso, Inscripcion  │
+│ Usuario, RefreshToken           │
 │ Estado y comportamiento         │
 └────────────────┬────────────────┘
                  │
@@ -230,6 +289,7 @@ CLIENTE
 │                                 │
 │ Repositories → Mappers          │
 │ Modelos ORM → Session           │
+│ PasswordHasher, JwtService      │
 └────────────────┬────────────────┘
                  │ SQL (psycopg2)
                  ▼
@@ -243,7 +303,7 @@ Cliente
    ↓
 HTTP / JSON
    ↓
-Router + DTO Pydantic
+Router + DTO Pydantic (+ get_usuario_actual en rutas protegidas)
    ↓
 Service
    ↓
@@ -256,7 +316,95 @@ Modelo ORM + Session (SQLAlchemy)
 PostgreSQL
 ```
 
-El dominio y los servicios no conocen SQLAlchemy: trabajan con entidades de dominio. Solo la capa de infraestructura sabe que los datos viven en PostgreSQL.
+El dominio y los servicios no conocen SQLAlchemy ni HTTP: trabajan con entidades de dominio. `AuthService` devuelve los tokens, pero no decide cómo viajan: eso lo resuelve la capa de presentación (el access token en el JSON y el refresh token en una cookie).
+
+---
+
+## Autenticación
+
+### Tokens
+
+| Token | Qué es | Dura | Dónde viaja | Dónde se guarda |
+|---|---|---|---|---|
+| **Access token** | JWT firmado con HS256 (`JWT_SECRET`). Claims: `sub`, `type`, `ver`, `iat`, `exp`, `jti`. | 15 minutos (`ACCESS_TOKEN_MINUTOS`) | Header `Authorization: Bearer <token>` | En ningún lado: la API lo valida con la firma. |
+| **Refresh token** | Texto aleatorio de 43 caracteres (`secrets.token_urlsafe(32)`). | 7 días (`REFRESH_TOKEN_DIAS`) | Cookie `refresh_token` | En la tabla `refresh_tokens`, solo su hash SHA-256. |
+
+### Flujo
+
+```text
+1. POST /auth/registro   → crea el usuario (no inicia sesión)
+2. POST /auth/login      → { "access_token": "eyJ...", "token_type": "bearer" }
+                           + cookie refresh_token
+3. GET /estudiantes      → Authorization: Bearer eyJ...
+4. (pasan 15 minutos)    → 401
+5. POST /auth/refresh    → access token nuevo + refresh token nuevo en la cookie
+6. POST /auth/logout     → revoca el refresh token y borra la cookie
+```
+
+### Endpoints de autenticación
+
+| Método | Endpoint | Requiere token | Acción |
+|---|---|---|---|
+| `POST` | `/auth/registro` | No | Crea un usuario. Responde `201` con `id`, `email` y `activo`. |
+| `POST` | `/auth/login` | No | Devuelve el access token y pone la cookie del refresh token. |
+| `POST` | `/auth/refresh` | No (usa la cookie) | Rota el refresh token y devuelve un access token nuevo. |
+| `POST` | `/auth/logout` | No (usa la cookie) | Revoca la sesión actual y borra la cookie. Responde `204` aunque no haya cookie. |
+| `POST` | `/auth/logout-todos` | Sí | Cierra la sesión en todos los dispositivos. |
+| `GET` | `/auth/me` | Sí | Devuelve el usuario dueño del token. |
+
+### Medidas de seguridad
+
+- **Contraseñas con Argon2id** (pwdlib): se guarda solo el hash, con salt propio por usuario.
+- **Bloqueo por fuerza bruta:** 5 intentos fallidos bloquean la cuenta 15 minutos.
+- **Mensajes genéricos:** email inexistente y contraseña incorrecta responden lo mismo (`401 "Credenciales inválidas."`), y el login con un email inexistente verifica contra un hash ficticio para tardar lo mismo.
+- **Cookie del refresh token:** `HttpOnly` (JavaScript no la lee), `SameSite=strict` (no viaja desde otros sitios), `Path=/auth` (solo va a las rutas de autenticación) y `Secure` según `COOKIE_SECURE`.
+- **Rotación y detección de reutilización:** cada refresh entrega un token nuevo y revoca el anterior. Si alguien reutiliza un refresh token ya usado, se revoca toda su familia (todas las sesiones que nacieron de ese login).
+- **Logout global:** `logout-todos` incrementa `token_version` del usuario; los access tokens que tienen el `ver` anterior dejan de valer de inmediato.
+- **Validación del JWT:** algoritmo fijo (`HS256`), claims obligatorios y `type == "access"`. Tokens con otro secreto o con `alg: none` responden `401`.
+- **CORS:** solo acepta el origen `http://localhost:5173` (el frontend), con credenciales.
+
+La contraseña mínima de registro es de **4 caracteres** para practicar cómodo en clase. En producción conviene 12 o más, como recomienda NIST.
+
+### Usuario de prueba
+
+Al iniciar la API, el seeder crea este usuario si no existe:
+
+```text
+email:      admin@academico.test
+contraseña: clave-demo-solo-local
+```
+
+Es solo para desarrollo local.
+
+### Probar con Swagger
+
+1. Abre `http://localhost:8080/docs`.
+2. Ejecuta `POST /auth/login` con el usuario de prueba y copia el valor de `access_token` (sin comillas).
+3. Pulsa **Authorize** (el candado), pega el token **sin** escribir `Bearer` y pulsa **Authorize**.
+4. Ejecuta `GET /estudiantes`: responde `200`. Con **Logout** en Authorize responde `401`.
+
+El botón Authorize no valida el token: solo lo guarda y lo envía. La validación ocurre en la API al llamar a un endpoint protegido.
+
+Para ver un token vencido sin esperar 15 minutos, pon `ACCESS_TOKEN_MINUTOS=1` en el `.env`, recrea el contenedor con `docker compose up -d`, espera un minuto y prueba `GET /estudiantes`.
+
+### Desde un cliente (TypeScript)
+
+La cookie del refresh token solo viaja si el cliente lo pide:
+
+```typescript
+const respuesta = await fetch("http://localhost:8080/auth/refresh", {
+  method: "POST",
+  credentials: "include",
+});
+```
+
+El access token se guarda en memoria (no en `localStorage`) y se envía en cada request:
+
+```typescript
+fetch("http://localhost:8080/estudiantes", {
+  headers: { Authorization: `Bearer ${accessToken}` },
+});
+```
 
 ---
 
@@ -272,14 +420,27 @@ El dominio y los servicios no conocen SQLAlchemy: trabajan con entidades de domi
 │ email (UQ)   │        │   (PK, FK)      │        │ creditos     │
 │ activo       │        └─────────────────┘        │ activo       │
 └──────────────┘                                   └──────────────┘
+
+┌───────────────────┐        ┌──────────────────┐
+│ usuarios          │        │ refresh_tokens   │
+├───────────────────┤        ├──────────────────┤
+│ id (PK)           │1      n│ id (PK)          │
+│ email (UQ)        ├────────┤ usuario_id (FK)  │
+│ password_hash     │        │ token_hash (UQ)  │
+│ activo            │        │ familia_id       │
+│ token_version     │        │ expira_en        │
+│ intentos_fallidos │        │ revocado_en      │
+│ bloqueado_hasta   │        └──────────────────┘
+└───────────────────┘
 ```
 
 - `inscripciones` es la **tabla de asociación** de la relación muchos a muchos.
 - Su clave primaria es el par (`estudiante_id`, `curso_id`): un estudiante no puede inscribirse dos veces en el mismo curso.
-- Las claves foráneas usan `ON DELETE CASCADE`: al eliminar un estudiante o un curso, se eliminan sus inscripciones.
-- `email` y `codigo` son únicos.
+- Las claves foráneas usan `ON DELETE CASCADE`: al eliminar un estudiante o un curso, se eliminan sus inscripciones; al eliminar un usuario, se eliminan sus refresh tokens.
+- `email` (en `estudiantes` y en `usuarios`), `codigo` y `token_hash` son únicos.
+- `usuarios` y `estudiantes` son tablas independientes: un usuario es quien inicia sesión en la API.
 
-En SQLAlchemy la relación se declara con `relationship(secondary=...)`:
+En SQLAlchemy la relación muchos a muchos se declara con `relationship(secondary=...)`:
 
 ```python
 class EstudianteModel(Base):
@@ -294,6 +455,8 @@ class EstudianteModel(Base):
 ---
 
 ## Endpoints disponibles
+
+Todos los endpoints de esta sección **requieren** `Authorization: Bearer <access_token>`. Sin token, o con un token inválido o vencido, responden `401`. Los endpoints de autenticación están en la sección [Autenticación](#autenticación).
 
 ### Estudiantes
 
@@ -330,6 +493,16 @@ Reglas de inscripción:
 - ambos deben estar activos (si no, `400`);
 - no se puede inscribir dos veces en el mismo curso (`400`).
 
+La protección se aplica por router, con una sola línea:
+
+```python
+router = APIRouter(
+    prefix="/estudiantes",
+    tags=["Estudiantes"],
+    dependencies=[Depends(get_usuario_actual)],
+)
+```
+
 ---
 
 ## Entidades de dominio
@@ -339,6 +512,10 @@ Reglas de inscripción:
 | `Estudiante` | `id`, `nombre`, `apellido`, `email`, `activo` | Nombre, apellido y email obligatorios. Email único (sin distinguir mayúsculas). Propiedad `nombre_completo`. |
 | `Curso` | `id`, `codigo`, `nombre`, `creditos`, `activo` | Código obligatorio, se guarda en mayúsculas y es único. Créditos ≥ 1. Propiedad `descripcion`. |
 | `Inscripcion` | `estudiante_id`, `curso_id` | Une un estudiante con un curso. |
+| `Usuario` | `id`, `email`, `password_hash`, `activo`, `token_version`, `intentos_fallidos`, `bloqueado_hasta` | Email obligatorio, en minúsculas. Guarda el hash, nunca la contraseña. Métodos `esta_bloqueado`, `registrar_fallo`, `registrar_exito` e `invalidar_sesiones`. |
+| `RefreshToken` | `id`, `usuario_id`, `token_hash`, `familia_id`, `expira_en`, `revocado_en` | Método `esta_vigente`: no revocado y no vencido. |
+
+Errores de autenticación (`domain/errores_auth.py`): `ErrorAutenticacion` y sus subclases `CredencialesInvalidas`, `CuentaBloqueada` y `TokenInvalido`. Los routers traducen cualquiera de ellas a `401`.
 
 ---
 
@@ -356,6 +533,10 @@ DTO significa **Data Transfer Object**: representa los datos que entran y salen 
 | `CursoResponseDTO` | Estructura de un curso devuelto por la API. |
 | `CursoPaginaDTO` | Respuesta paginada de cursos. |
 | `CursoQueryDTO` | Valida `pagina` y `tamano`. |
+| `RegistroDTO` | Email y contraseña (`SecretStr`, entre 4 y 128 caracteres). |
+| `LoginDTO` | Email y contraseña (mínimo 1 carácter). |
+| `UsuarioResponseDTO` | `id`, `email` y `activo`: nunca expone el hash. |
+| `TokenResponseDTO` | `access_token` y `token_type="bearer"`. |
 
 Ejemplo:
 
@@ -370,6 +551,8 @@ class CursoCreateDTO(BaseModel):
     nombre: str = Field(min_length=1, max_length=150)
     creditos: int = Field(ge=1, le=30)
 ```
+
+`SecretStr` muestra `**********` en logs y errores; para leer la contraseña se usa `get_secret_value()`.
 
 ### DTO, entidad de dominio y modelo ORM
 
@@ -474,11 +657,20 @@ def crear(self, curso: Curso) -> Curso:
     return curso_mapper.a_dominio(modelo)
 ```
 
+`RefreshTokenRepository.rotar` revoca el token actual y guarda el nuevo en **un solo commit** (una transacción): si algo falla en medio, no queda el usuario sin un token válido.
+
 ---
 
 ## Migraciones con Alembic
 
-Las tablas **no** se crean al iniciar la API: se crean y modifican con migraciones. Alembic guarda en la tabla `alembic_version` qué migración está aplicada. `migrations/env.py` usa el mismo `engine` que la aplicación, así que también lee la conexión desde el `.env` (no hay credenciales en `alembic.ini`).
+Las tablas **no** se crean al iniciar la API: se crean y modifican con migraciones. Alembic guarda en la tabla `alembic_version` qué migración está aplicada. `migrations/env.py` usa el mismo `engine` que la aplicación, así que también lee la conexión desde el `.env` (no hay credenciales en `alembic.ini`). Con Docker, el contenedor de la API ejecuta `alembic upgrade head` cada vez que arranca.
+
+| Migración | Qué hace |
+|---|---|
+| `0001_crear_tablas.py` | Crea `estudiantes`, `cursos` e `inscripciones` con sus índices únicos y claves foráneas. |
+| `0002_eliminar_tabla_alumnos.py` | Elimina la tabla antigua `alumnos`. |
+| `0003_crear_tabla_usuarios.py` | Crea `usuarios`. |
+| `0004_crear_tabla_refresh_tokens.py` | Crea `refresh_tokens`, con FK a `usuarios` y `ON DELETE CASCADE`. |
 
 | Comando | Qué hace |
 |---|---|
@@ -487,18 +679,19 @@ Las tablas **no** se crean al iniciar la API: se crean y modifican con migracion
 | `uv run alembic downgrade base` | Deshace todas las migraciones (borra las tablas). |
 | `uv run alembic current` | Muestra la migración aplicada. |
 | `uv run alembic history` | Lista todas las migraciones. |
-| `uv run alembic revision --autogenerate -m "mensaje"` | Crea una migración comparando los modelos con la base de datos. |
+| `uv run alembic revision --autogenerate --rev-id 0005 -m "mensaje"` | Crea una migración comparando los modelos con la base de datos. `--rev-id` mantiene la numeración. |
 | `uv run alembic check` | Indica si hay cambios en los modelos sin migración. |
 
-La migración inicial `0001_crear_tablas.py` crea `estudiantes`, `cursos` e `inscripciones` con sus índices únicos y claves foráneas.
+Para correr Alembic desde tu PC contra la base de datos de Docker, el contenedor `db` debe estar encendido (`docker compose up -d db`) y el `.env` debe tener `DB_HOST=localhost` y `DB_PORT=5433`.
 
 Flujo para cambiar un modelo (por ejemplo, agregar una columna):
 
 ```text
 1. Modificar el modelo en infrastructure/models/
-2. uv run alembic revision --autogenerate -m "agregar columna telefono"
-3. Revisar el archivo generado en migrations/versions/
-4. uv run alembic upgrade head
+2. Si es un modelo nuevo, importarlo en migrations/env.py
+3. uv run alembic revision --autogenerate --rev-id 0005 -m "agregar columna telefono"
+4. Revisar el archivo generado en migrations/versions/
+5. uv run alembic upgrade head   (o docker compose up -d --build)
 ```
 
 Para empezar de cero:
@@ -520,23 +713,29 @@ Al iniciar la API, `app/main.py` revisa si la tabla `estudiantes` está vacía. 
 | `curso_seeder.py` | 10 cursos (`INF101`, `INF102`, …, `MAT102`) |
 | `inscripcion_seeder.py` | 180 inscripciones (cada estudiante en 3 cursos) |
 
+Aparte, `cargar_usuarios_iniciales()` crea el usuario `admin@academico.test` si todavía no existe, aunque la base ya tenga estudiantes. El seeder de usuarios pasa siempre por `AuthService.registrar`, así la contraseña queda hasheada.
+
 Si la base de datos ya tiene datos, los seeders no se ejecutan.
 
 ---
 
-## Recorrido de una solicitud POST
+## Recorrido de una solicitud protegida
 
 ```http
 POST /estudiantes/1/cursos/5
+Authorization: Bearer eyJhbGciOiJIUzI1NiIs...
 ```
 
 ```text
 Cliente
-   │ POST /estudiantes/1/cursos/5
+   │ POST /estudiantes/1/cursos/5  + Authorization: Bearer ...
    ▼
 FastAPI
    │ valida los parámetros de ruta (> 0)
    │ get_session() abre una sesión
+   │ get_usuario_actual()
+   │    verifica la firma, exp y type del JWT
+   │    carga el usuario y compara token_version   → si falla, 401
    ▼
 inscripcion_router
    ▼
@@ -561,7 +760,7 @@ Cliente
 
 ## Probar la API con Swagger
 
-Abre `http://127.0.0.1:8000/docs` y prueba:
+Abre `http://localhost:8080/docs`, autentícate como se explica en [Probar con Swagger](#probar-con-swagger) y prueba:
 
 ```http
 GET /estudiantes?pagina=1&tamano=10
@@ -598,11 +797,12 @@ Respuesta paginada:
 | Código | Significado |
 |---|---|
 | `200 OK` | Solicitud procesada correctamente |
-| `201 Created` | Recurso creado o inscripción realizada |
-| `204 No Content` | Recurso eliminado o estudiante retirado del curso |
+| `201 Created` | Recurso creado, usuario registrado o inscripción realizada |
+| `204 No Content` | Recurso eliminado, estudiante retirado del curso o sesión cerrada |
 | `400 Bad Request` | Regla de aplicación inválida (email o código duplicado, inscripción repetida, entidad inactiva) |
+| `401 Unauthorized` | Falta el token o es inválido o vencido, credenciales incorrectas, cuenta bloqueada o refresh token inválido |
 | `404 Not Found` | Estudiante, curso o inscripción inexistente |
-| `422 Unprocessable Entity` | Error de validación |
+| `422 Unprocessable Entity` | Error de validación (por ejemplo, contraseña de menos de 4 caracteres) |
 
 ---
 
@@ -614,7 +814,7 @@ El proyecto incluye `.vscode/launch.json`. Para iniciar la depuración:
 Ctrl + Shift + D → "Depurar API de estudiantes" → F5
 ```
 
-La configuración utiliza el puerto `8001`. Si ese puerto está ocupado, cambia el valor en `.vscode/launch.json`.
+La configuración levanta la API en tu PC (no en Docker) en el puerto `8001`. Necesita el `.env` con la base de datos accesible: por ejemplo, `docker compose up -d db` y `DB_PORT=5433`. Si ese puerto está ocupado, cambia el valor en `.vscode/launch.json`.
 
 | Tecla | Acción |
 |---|---|
@@ -631,17 +831,48 @@ Referencia: [Depuración de Python en VS Code](https://code.visualstudio.com/doc
 
 ## Problemas frecuentes
 
+### Falta JWT_SECRET en el archivo .env
+
+Docker Compose no encuentra el secreto. Genera uno con `python -c "import secrets; print(secrets.token_urlsafe(64))"` y agrégalo al `.env` como `JWT_SECRET=...`. Sin Docker, el mismo problema aparece como `KeyError: 'JWT_SECRET'`.
+
 ### KeyError: 'DB_USER' (u otra variable `DB_*`)
 
 Falta el archivo `.env` o le falta esa variable. Copia `.env.example` como `.env` y completa los datos.
 
-### relation "estudiantes" does not exist
+### no configuration file provided: not found
 
-Las tablas no existen todavía. Ejecuta:
+Ejecutaste `docker compose` fuera de la carpeta del proyecto. Entra primero a la carpeta que tiene `docker-compose.yml`.
+
+### Connection refused al ejecutar Alembic desde tu PC
+
+- El contenedor de la base de datos está apagado: `docker compose up -d db`.
+- El puerto no coincide: la base de Docker está en el **5433**, no en el 5432. Revisa `DB_PORT` en el `.env`.
+
+### relation "usuarios" does not exist (o cualquier otra tabla)
+
+Las migraciones no están aplicadas. Con Docker, reconstruye la imagen para que incluya las migraciones nuevas:
+
+```bash
+docker compose up -d --build
+```
+
+Sin Docker:
 
 ```bash
 uv run alembic upgrade head
 ```
+
+### 401 en Swagger aunque pegué el token
+
+- Pegaste `Bearer eyJ...`: Swagger agrega `Bearer` solo, pega únicamente el token.
+- Pegaste el token con comillas.
+- Pasaron más de 15 minutos desde el login: inicia sesión otra vez o usa `POST /auth/refresh`.
+- Llamaste a `logout-todos`: los tokens anteriores dejan de valer.
+- Fallaste 5 veces la contraseña: la cuenta queda bloqueada 15 minutos.
+
+### El registro no devuelve un token
+
+Es lo esperado: `POST /auth/registro` solo crea el usuario. El token se obtiene con `POST /auth/login`.
 
 ### DuplicateTable al ejecutar `alembic upgrade head`
 
@@ -653,7 +884,7 @@ uv run alembic stamp head
 
 ### Address already in use
 
-El puerto ya está siendo utilizado. Inicia Uvicorn en otro puerto:
+El puerto ya está siendo utilizado. Inicia Uvicorn en otro puerto, o cambia `APP_PORT` en el `.env` si usas Docker:
 
 ```bash
 uv run uvicorn app.main:app --reload --port 8765
@@ -661,7 +892,7 @@ uv run uvicorn app.main:app --reload --port 8765
 
 ### No module named 'app'
 
-Ejecuta los comandos desde la carpeta `backend_S4/`.
+Ejecuta los comandos desde la raíz del proyecto (la carpeta que tiene `pyproject.toml`).
 
 ---
 
@@ -683,13 +914,14 @@ Actualmente se trabajan:
 - Códigos de estado HTTP.
 - Swagger / OpenAPI.
 - Separación de responsabilidades.
+- Docker y Docker Compose.
+- Autenticación: hash de contraseñas, JWT, refresh tokens con rotación, cookies seguras, logout y CORS.
 
 Todavía no se incorporan:
 
 - Pruebas automatizadas.
-- Autenticación.
-- Autorización.
-- Docker.
+- Autorización por roles (por ejemplo, que solo un administrador pueda eliminar).
+- Verificación de email y recuperación de contraseña.
 - CI/CD.
 
 El proyecto continuará evolucionando progresivamente durante el curso.
