@@ -20,7 +20,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 def upgrade() -> None:
     """Upgrade schema."""
-    op.drop_table('alumnos')
+    # IF EXISTS: en una base de datos nueva (p. ej. en Docker) la tabla no existe.
+    op.execute('DROP TABLE IF EXISTS alumnos')
 
 
 def downgrade() -> None:
