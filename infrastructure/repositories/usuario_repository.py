@@ -1,4 +1,5 @@
 from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from domain.usuario import Usuario
@@ -14,7 +15,14 @@ class UsuarioRepository:
         modelo = usuario_mapper.a_modelo(usuario)
 
         self.session.add(modelo)
-        self.session.commit()
+
+        try:
+            self.session.commit()
+        except IntegrityError as error:
+            # Dos registros simultáneos con el mismo email: el índice único lo frena.
+            self.session.rollback()
+            raise ValueError("No se pudo completar el registro.") from error
+
         self.session.refresh(modelo)
 
         return usuario_mapper.a_dominio(modelo)
