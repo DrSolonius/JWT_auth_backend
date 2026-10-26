@@ -11,7 +11,10 @@ from fastapi import (
 )
 
 from application.services.estudiante_service import EstudianteService
-from presentation.dependencies import get_estudiante_service
+from presentation.dependencies import (
+    get_estudiante_service,
+    get_usuario_actual,
+)
 from presentation.schemas.dtos.estudiante_dto import (
     EstudianteCreateDTO,
     EstudianteUpdateDTO,
@@ -27,6 +30,7 @@ from presentation.schemas.dtos.estudiante_query_dto import (
 router = APIRouter(
     prefix="/estudiantes",
     tags=["Estudiantes"],
+    dependencies=[Depends(get_usuario_actual)],
 )
 
 # El servicio se construye por solicitud con su propia sesión de base de datos.

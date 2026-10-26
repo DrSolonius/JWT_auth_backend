@@ -10,12 +10,18 @@ from fastapi import (
 )
 
 from application.services.inscripcion_service import InscripcionService
-from presentation.dependencies import get_inscripcion_service
+from presentation.dependencies import (
+    get_inscripcion_service,
+    get_usuario_actual,
+)
 from presentation.schemas.dtos.curso_dto import CursoResponseDTO
 from presentation.schemas.dtos.estudiante_dto import EstudianteResponseDTO
 
 
-router = APIRouter(tags=["Inscripciones"])
+router = APIRouter(
+    tags=["Inscripciones"],
+    dependencies=[Depends(get_usuario_actual)],
+)
 
 # El servicio se construye por solicitud con su propia sesión de base de datos.
 ServiceDep = Annotated[InscripcionService, Depends(get_inscripcion_service)]

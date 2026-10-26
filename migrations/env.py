@@ -10,6 +10,8 @@ from infrastructure.models import (  # noqa: F401
     curso_model,
     estudiante_model,
     inscripcion_model,
+    refresh_token_model,
+    usuario_model,
 )
 
 
