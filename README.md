@@ -72,9 +72,9 @@ El archivo `.env` contiene credenciales y el secreto que firma los tokens: está
 
 ---
 
-## Docker Compose: un archivo, dos contenedores
+## Docker Compose: un archivo, tres contenedores
 
-`docker-compose.yml` define dos **servicios**. Al ejecutar `docker compose up --build`, Docker crea un contenedor por cada uno, más una red y un volumen:
+`docker-compose.yml` define tres **servicios**: la API, la base de datos y pgAdmin (más abajo). Al ejecutar `docker compose up --build`, Docker crea un contenedor por cada uno, más una red y los volúmenes. Así se conectan la API y la base:
 
 ```text
                  Tu PC
@@ -116,19 +116,29 @@ El `Dockerfile` construye la imagen de la API en **dos etapas**:
 1. **builder**: parte de la imagen de `uv` con Python 3.14, instala las herramientas para compilar `psycopg2` y ejecuta `uv sync --frozen --no-dev` a partir de `uv.lock`.
 2. **imagen final**: parte de `python:3.14-slim`, instala solo `libpq5`, copia el entorno virtual ya armado y el código. Así la imagen final no lleva compiladores.
 
+### pgAdmin
+
+Para ver y consultar la base desde el navegador:
+
+1. Abre `http://localhost:5050` e inicia sesión con `PGADMIN_EMAIL` y `PGADMIN_PASSWORD` de tu `.env` (por defecto, `admin@example.com` y `admin`).
+2. Haz clic derecho en **Servers → Register → Server**. En **General**, ponle un nombre.
+3. En **Connection** usa host `db`, puerto `5432`, y la base, el usuario y la contraseña de tu `.env` (`DB_NAME`, `DB_USER`, `DB_PASSWORD`).
+
+El host es `db` y no `localhost` porque pgAdmin corre dentro de la red de Docker. Su puerto solo se publica en tu PC (`127.0.0.1`). `PGADMIN_EMAIL` y `PGADMIN_PASSWORD` solo se usan la primera vez que arranca: para cambiarlos después, borra el volumen `pgadmin_data`.
+
 Comandos útiles:
 
 | Comando | Qué hace |
 |---|---|
-| `docker compose up --build` | Construye la imagen de la API y levanta los dos contenedores. |
+| `docker compose up --build` | Construye la imagen de la API y levanta los tres contenedores. |
 | `docker compose up -d` | Levanta los contenedores en segundo plano, sin reconstruir. |
 | `docker compose up -d --build` | Reconstruye la imagen: necesario después de cambiar código, dependencias o migraciones. |
 | `docker compose up -d db` | Levanta solo la base de datos (para correr la API o Alembic desde tu PC). |
-| `docker compose ps` | Muestra los dos contenedores y su estado. |
+| `docker compose ps` | Muestra los contenedores y su estado. |
 | `docker compose logs -f app` | Muestra los logs de la API. |
 | `docker compose exec db psql -U alumno -d clase` | Abre una consola de PostgreSQL dentro del contenedor `db`. |
 | `docker compose down` | Detiene y elimina los contenedores y la red (los datos se conservan en el volumen). |
-| `docker compose down -v` | Igual, pero borra también el volumen con los datos de PostgreSQL. |
+| `docker compose down -v` | Igual, pero borra también los volúmenes: los datos de PostgreSQL y la configuración de pgAdmin. |
 
 Todos los comandos se ejecutan desde la carpeta que tiene `docker-compose.yml`.
 
