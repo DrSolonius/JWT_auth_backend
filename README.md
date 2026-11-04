@@ -188,6 +188,7 @@ JWT_auth_backend/
 ├── application/
 │   └── services/
 │       ├── auth_service.py
+│       ├── usuario_service.py
 │       ├── curso_service.py
 │       ├── estudiante_service.py
 │       └── inscripcion_service.py
@@ -249,6 +250,7 @@ JWT_auth_backend/
 │   │
 │   ├── routers/
 │   │   ├── auth_router.py
+│   │   ├── usuario_router.py
 │   │   ├── curso_router.py
 │   │   ├── estudiante_router.py
 │   │   └── inscripcion_router.py
@@ -382,7 +384,7 @@ El dominio y los servicios no conocen SQLAlchemy ni HTTP: trabajan con entidades
 ### Flujo
 
 ```text
-1. POST /auth/registro   → crea el usuario (no inicia sesión)
+1. POST /auth/registro   → crea el usuario inactivo; un administrador debe activarlo
 2. POST /auth/login      → { "access_token": "eyJ...", "token_type": "bearer" }
                            + cookie refresh_token
 3. GET /estudiantes      → Authorization: Bearer eyJ...
@@ -395,12 +397,17 @@ El dominio y los servicios no conocen SQLAlchemy ni HTTP: trabajan con entidades
 
 | Método | Endpoint | Requiere token | Acción |
 |---|---|---|---|
-| `POST` | `/auth/registro` | No | Crea un usuario. Responde `201` con `id`, `email` y `activo`. |
+| `POST` | `/auth/registro` | No | Crea un usuario inactivo. Responde `201` con `id`, `email`, `activo` y `es_admin`. |
 | `POST` | `/auth/login` | No | Devuelve el access token y pone la cookie del refresh token. |
 | `POST` | `/auth/refresh` | No (usa la cookie) | Rota el refresh token y devuelve un access token nuevo. |
 | `POST` | `/auth/logout` | No (usa la cookie) | Revoca la sesión actual y borra la cookie. Responde `204` aunque no haya cookie. |
 | `POST` | `/auth/logout-todos` | Sí | Cierra la sesión en todos los dispositivos. |
 | `GET` | `/auth/me` | Sí | Devuelve el usuario dueño del token. |
+| `GET` | `/usuarios` | Admin | Lista los usuarios. Con `?activo=false`, los pendientes de aprobación. |
+| `POST` | `/usuarios/{id}/activar` | Admin | Aprueba la cuenta: ya puede iniciar sesión. |
+| `POST` | `/usuarios/{id}/desactivar` | Admin | Desactiva la cuenta y cierra sus sesiones de inmediato. |
+
+Sin ser administrador, estos tres endpoints responden `403`.
 
 ### Medidas de seguridad
 
@@ -415,21 +422,16 @@ El dominio y los servicios no conocen SQLAlchemy ni HTTP: trabajan con entidades
 
 La contraseña mínima de registro es de **4 caracteres** para practicar cómodo en clase. En producción conviene 12 o más, como recomienda NIST.
 
-### Usuario de prueba
+### Administrador y aprobación de cuentas
 
-Al iniciar la API, el seeder crea este usuario si no existe:
+Cualquiera puede registrarse, pero la cuenta queda inactiva y el login responde `401` hasta que un administrador la active.
 
-```text
-email:      admin@academico.test
-contraseña: clave-demo-solo-local
-```
-
-Es solo para desarrollo local.
+El administrador se define en el `.env` con `ADMIN_EMAIL` y `ADMIN_PASSWORD`. Al iniciar, la API lo crea o lo deja con esos datos; si la contraseña cambió, cierra sus sesiones anteriores. Sin `ADMIN_PASSWORD` no hay administrador y nadie puede aprobar cuentas. La contraseña nunca va en el repositorio.
 
 ### Probar con Swagger
 
 1. Abre `http://localhost:8080/docs`.
-2. Ejecuta `POST /auth/login` con el usuario de prueba y copia el valor de `access_token` (sin comillas).
+2. Ejecuta `POST /auth/login` con el administrador de tu `.env` y copia el valor de `access_token` (sin comillas).
 3. Pulsa **Authorize** (el candado), pega el token **sin** escribir `Bearer` y pulsa **Authorize**.
 4. Ejecuta `GET /estudiantes`: responde `200`. Con **Logout** en Authorize responde `401`.
 
@@ -763,7 +765,7 @@ Al iniciar la API, `app/main.py` revisa si la tabla `estudiantes` está vacía. 
 | `curso_seeder.py` | 10 cursos (`INF101`, `INF102`, …, `MAT102`) |
 | `inscripcion_seeder.py` | 180 inscripciones (cada estudiante en 3 cursos) |
 
-Aparte, `cargar_usuarios_iniciales()` crea el usuario `admin@academico.test` si todavía no existe, aunque la base ya tenga estudiantes. El seeder de usuarios pasa siempre por `AuthService.registrar`, así la contraseña queda hasheada.
+Aparte, `cargar_usuarios_iniciales()` crea o actualiza el administrador definido en `ADMIN_EMAIL` y `ADMIN_PASSWORD`, aunque la base ya tenga estudiantes. Pasa siempre por `AuthService`, así la contraseña queda hasheada.
 
 Si la base de datos ya tiene datos, los seeders no se ejecutan.
 
@@ -922,7 +924,7 @@ uv run alembic upgrade head
 
 ### El registro no devuelve un token
 
-Es lo esperado: `POST /auth/registro` solo crea el usuario. El token se obtiene con `POST /auth/login`.
+Es lo esperado: `POST /auth/registro` solo crea el usuario, inactivo. Cuando un administrador lo activa, el token se obtiene con `POST /auth/login`.
 
 ### DuplicateTable al ejecutar `alembic upgrade head`
 

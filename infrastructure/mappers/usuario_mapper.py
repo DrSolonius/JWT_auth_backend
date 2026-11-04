@@ -11,6 +11,7 @@ def a_dominio(modelo: UsuarioModel) -> Usuario:
         token_version=modelo.token_version,
         intentos_fallidos=modelo.intentos_fallidos,
         bloqueado_hasta=modelo.bloqueado_hasta,
+        es_admin=modelo.es_admin,
     )
 
 
@@ -23,6 +24,7 @@ def a_modelo(usuario: Usuario) -> UsuarioModel:
         token_version=usuario.token_version,
         intentos_fallidos=usuario.intentos_fallidos,
         bloqueado_hasta=usuario.bloqueado_hasta,
+        es_admin=usuario.es_admin,
     )
 
 
@@ -33,3 +35,4 @@ def actualizar_modelo(modelo: UsuarioModel, usuario: Usuario) -> None:
     modelo.token_version = usuario.token_version
     modelo.intentos_fallidos = usuario.intentos_fallidos
     modelo.bloqueado_hasta = usuario.bloqueado_hasta
+    modelo.es_admin = usuario.es_admin

@@ -1,3 +1,4 @@
+import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -15,11 +16,11 @@ from infrastructure.repositories.estudiante_repository import (
 from infrastructure.repositories.inscripcion_repository import (
     InscripcionRepository,
 )
-from infrastructure.repositories.usuario_repository import UsuarioRepository
 from infrastructure.seeders.curso_seeder import seed_cursos
 from infrastructure.seeders.estudiante_seeder import seed_estudiantes
 from infrastructure.seeders.inscripcion_seeder import seed_inscripciones
-from infrastructure.seeders.usuario_seeder import EMAIL_ADMIN, seed_usuarios
+from infrastructure.security import config
+from infrastructure.seeders.usuario_seeder import seed_admin
 from presentation.dependencies import get_auth_service
 from presentation.routers.auth_router import router as auth_router
 from presentation.routers.curso_router import router as curso_router
@@ -27,6 +28,10 @@ from presentation.routers.estudiante_router import router
 from presentation.routers.inscripcion_router import (
     router as inscripcion_router,
 )
+from presentation.routers.usuario_router import router as usuario_router
+
+
+logger = logging.getLogger(__name__)
 
 
 def cargar_datos_iniciales() -> None:
@@ -53,12 +58,17 @@ def cargar_datos_iniciales() -> None:
 
 
 def cargar_usuarios_iniciales() -> None:
-    with SessionLocal() as session:
-        # Función aparte: cargar_datos_iniciales sale si ya hay estudiantes.
-        if UsuarioRepository(session).obtener_por_email(EMAIL_ADMIN):
-            return
+    # Función aparte: cargar_datos_iniciales sale si ya hay estudiantes.
+    if not config.ADMIN_PASSWORD:
+        logger.warning("Falta ADMIN_PASSWORD: no hay administrador para aprobar cuentas.")
+        return
 
-        seed_usuarios(get_auth_service(session))
+    with SessionLocal() as session:
+        seed_admin(
+            get_auth_service(session),
+            config.ADMIN_EMAIL,
+            config.ADMIN_PASSWORD,
+        )
 
 
 @asynccontextmanager
@@ -80,6 +90,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router)
+app.include_router(usuario_router)
 app.include_router(router)
 app.include_router(curso_router)
 app.include_router(inscripcion_router)

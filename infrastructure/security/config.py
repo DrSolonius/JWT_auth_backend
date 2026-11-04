@@ -12,3 +12,6 @@ JWT_ALGORITMO = "HS256" # fijo en el código, no en el .env
 ACCESS_TOKEN_MINUTOS = int(os.environ.get("ACCESS_TOKEN_MINUTOS", 15))
 REFRESH_TOKEN_DIAS = int(os.environ.get("REFRESH_TOKEN_DIAS", 7))
 COOKIE_SECURE = os.environ.get("COOKIE_SECURE", "true").lower() == "true"
+# Sin ADMIN_PASSWORD no se crea el administrador y nadie puede aprobar cuentas.
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@academico.test")
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD", "")

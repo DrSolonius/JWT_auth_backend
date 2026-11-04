@@ -49,6 +49,17 @@ class UsuarioRepository:
 
         return usuario_mapper.a_dominio(modelo)
 
+    def listar(self, activo: bool | None = None) -> list[Usuario]:
+        consulta = select(UsuarioModel).order_by(UsuarioModel.id)
+
+        if activo is not None:
+            consulta = consulta.where(UsuarioModel.activo.is_(activo))
+
+        return [
+            usuario_mapper.a_dominio(modelo)
+            for modelo in self.session.scalars(consulta)
+        ]
+
     def actualizar(self, usuario: Usuario) -> Usuario:
         modelo = self.session.get(UsuarioModel, usuario.id)
 

@@ -18,3 +18,4 @@ class UsuarioModel(Base):
     bloqueado_hasta: Mapped[datetime | None] = mapped_column(
         DateTime(timezone=True)
     )
+    es_admin: Mapped[bool] = mapped_column(Boolean, default=False)

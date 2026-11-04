@@ -9,6 +9,7 @@ from application.services.auth_service import AuthService
 from application.services.curso_service import CursoService
 from application.services.estudiante_service import EstudianteService
 from application.services.inscripcion_service import InscripcionService
+from application.services.usuario_service import UsuarioService
 from domain.errores_auth import TokenInvalido
 from domain.usuario import Usuario
 from infrastructure.database import SessionLocal
@@ -76,6 +77,13 @@ def get_auth_service(session: SessionDep) -> AuthService:
     )
 
 
+def get_usuario_service(session: SessionDep) -> UsuarioService:
+    return UsuarioService(
+        UsuarioRepository(session),
+        RefreshTokenRepository(session),
+    )
+
+
 # auto_error=False: respondemos nosotros siempre 401 con WWW-Authenticate.
 bearer = HTTPBearer(auto_error=False)
 CredencialesDep = Annotated[
@@ -114,3 +122,16 @@ def get_usuario_actual(
 
 
 UsuarioActualDep = Annotated[Usuario, Depends(get_usuario_actual)]
+
+
+def get_admin_actual(usuario: UsuarioActualDep) -> Usuario:
+    if not usuario.es_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Solo un administrador puede hacer esto.",
+        )
+
+    return usuario
+
+
+AdminActualDep = Annotated[Usuario, Depends(get_admin_actual)]

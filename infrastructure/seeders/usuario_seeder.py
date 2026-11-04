@@ -1,12 +1,6 @@
 from application.services.auth_service import AuthService
 
 
-EMAIL_ADMIN = "admin@academico.test"
-
-
-def seed_usuarios(service: AuthService) -> None:
+def seed_admin(service: AuthService, email: str, password: str) -> None:
     # Siempre a través del servicio: así la contraseña queda hasheada.
-    service.registrar(
-        email=EMAIL_ADMIN,
-        password="clave-demo-solo-local",
-    )
+    service.asegurar_admin(email, password)

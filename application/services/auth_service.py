@@ -33,8 +33,28 @@ class AuthService:
         usuario = Usuario(
             email=email,
             password_hash=self.hasher.hashear(password),
+            activo=False,  # no puede iniciar sesión hasta que un admin la active
         )
         return self.usuario_repository.crear(usuario)
+
+    def asegurar_admin(self, email: str, password: str) -> Usuario:
+        """Deja al administrador igual que en la configuración (lo crea si falta)."""
+        usuario = self.usuario_repository.obtener_por_email(email)
+        if usuario is None:
+            return self.usuario_repository.crear(Usuario(
+                email=email,
+                password_hash=self.hasher.hashear(password),
+                es_admin=True,
+            ))
+        if not self.hasher.verificar(password, usuario.password_hash):
+            # La contraseña cambió: las sesiones abiertas con la anterior dejan de valer.
+            usuario.password_hash = self.hasher.hashear(password)
+            usuario.invalidar_sesiones()
+            self.refresh_repository.revocar_todos_de_usuario(usuario.id)
+        usuario.activar()
+        usuario.es_admin = True
+        usuario.registrar_exito()
+        return self.usuario_repository.actualizar(usuario)
 
     def iniciar_sesion(self, email: str, password: str) -> ResultadoAuth:
         usuario = self.usuario_repository.obtener_por_email(email)

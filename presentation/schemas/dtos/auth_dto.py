@@ -27,6 +27,7 @@ class UsuarioResponseDTO(BaseModel):
     id: int
     email: str
     activo: bool
+    es_admin: bool
 
 
 class TokenResponseDTO(BaseModel):

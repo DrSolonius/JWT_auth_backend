@@ -32,6 +32,9 @@ services:
       ACCESS_TOKEN_MINUTOS: ${ACCESS_TOKEN_MINUTOS:-15}
       REFRESH_TOKEN_DIAS: ${REFRESH_TOKEN_DIAS:-7}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Sin ADMIN_PASSWORD no se crea el administrador.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@academico.test}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:
       - "${APP_PORT:-8080}:8000"
     depends_on:

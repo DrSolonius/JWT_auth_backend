@@ -15,6 +15,7 @@ class Usuario:
     token_version: int = 0
     intentos_fallidos: int = 0
     bloqueado_hasta: datetime | None = None
+    es_admin: bool = False
 
     def __post_init__(self) -> None:
         self.email = self.email.strip().lower()
@@ -24,6 +25,13 @@ class Usuario:
 
     def invalidar_sesiones(self) -> None:
         self.token_version += 1
+
+    def activar(self) -> None:
+        self.activo = True
+
+    def desactivar(self) -> None:
+        self.activo = False
+        self.invalidar_sesiones()
 
     def esta_bloqueado(self, ahora: datetime) -> bool:
         return self.bloqueado_hasta is not None and self.bloqueado_hasta > ahora
