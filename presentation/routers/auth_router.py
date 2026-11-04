@@ -10,7 +10,7 @@ from fastapi import (
 )
 
 from application.services.auth_service import AuthService
-from domain.errores_auth import ErrorAutenticacion
+from domain.errores_auth import CuentaInactiva, ErrorAutenticacion
 from presentation.dependencies import UsuarioActualDep, get_auth_service
 from presentation.schemas.dtos.auth_dto import (
     LoginDTO,
@@ -55,6 +55,11 @@ def login(datos: LoginDTO, response: Response, service: AuthDep):
             email=datos.email,
             password=datos.password.get_secret_value(),
         )
+    except CuentaInactiva as error:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tu cuenta está inactiva o pendiente de aprobación.",
+        ) from error
     except ErrorAutenticacion as error:
         raise HTTPException(
             status_code=401,

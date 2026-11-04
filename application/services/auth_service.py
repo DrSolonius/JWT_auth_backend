@@ -2,7 +2,12 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from domain.errores_auth import CredencialesInvalidas, CuentaBloqueada, TokenInvalido
+from domain.errores_auth import (
+    CredencialesInvalidas,
+    CuentaBloqueada,
+    CuentaInactiva,
+    TokenInvalido,
+)
 from domain.refresh_token import RefreshToken
 from domain.usuario import Usuario
 from infrastructure.security import config
@@ -68,8 +73,9 @@ class AuthService:
             usuario.registrar_fallo(ahora)
             self.usuario_repository.actualizar(usuario)
             raise CredencialesInvalidas()
+        # Solo se avisa después de verificar la contraseña: sin ella no revela nada.
         if not usuario.activo:
-            raise CredencialesInvalidas()
+            raise CuentaInactiva()
         usuario.registrar_exito()
         self.usuario_repository.actualizar(usuario)
         return self._emitir_tokens(usuario, familia_id=uuid4().hex)

@@ -434,7 +434,7 @@ La contraseña mínima de registro es de **4 caracteres** para practicar cómodo
 
 ### Administrador y aprobación de cuentas
 
-Cualquiera puede registrarse, pero la cuenta queda inactiva y el login responde `401` hasta que un administrador la active.
+Cualquiera puede registrarse, pero la cuenta queda inactiva hasta que un administrador la active. Mientras tanto, el login con la contraseña correcta responde `403 "Tu cuenta está inactiva o pendiente de aprobación."`; con una contraseña incorrecta sigue respondiendo el `401` genérico, así que el aviso no revela qué cuentas existen.
 
 El administrador se define en el `.env` con `ADMIN_EMAIL` y `ADMIN_PASSWORD`. Al iniciar, la API lo crea o lo deja con esos datos; si la contraseña cambió, cierra sus sesiones anteriores. Sin `ADMIN_PASSWORD` no hay administrador y nadie puede aprobar cuentas. La contraseña nunca va en el repositorio.
 

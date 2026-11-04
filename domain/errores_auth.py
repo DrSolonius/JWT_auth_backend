@@ -12,3 +12,7 @@ class CuentaBloqueada(ErrorAutenticacion):
 
 class TokenInvalido(ErrorAutenticacion):
     pass
+
+
+class CuentaInactiva(ErrorAutenticacion):
+    """La contraseña es correcta, pero la cuenta no está activa: se traduce a 403."""
