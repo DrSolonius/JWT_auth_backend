@@ -4,7 +4,7 @@
 
 ## Contexto
 
-El Sistema Académico (FastAPI + SQLAlchemy + PostgreSQL + JWT) ya tiene una suite de 54 tests en `tests/unit`, `tests/integration` y `tests/api`.
+El Sistema Académico (FastAPI + SQLAlchemy + PostgreSQL + JWT) ya tiene una suite de 59 tests en `tests/unit`, `tests/integration` y `tests/api`.
 Tu grupo la va a **ampliar** y va a incorporar una **regla de negocio nueva escribiendo primero el test** (TDD).
 
 > **Regla nueva:** el email de un estudiante debe contener el carácter `@`.
@@ -28,7 +28,7 @@ uv sync --group dev
 uv run pytest
 ```
 
-Debes ver `54 passed` antes de empezar. No necesitas `.env` ni Docker: los tests usan una base SQLite en memoria (ver `tests/conftest.py`).
+Debes ver `59 passed` antes de empezar. No necesitas `.env` ni Docker: los tests usan una base SQLite en memoria (ver `tests/conftest.py`).
 
 ## Parte 1 — Tests unitarios (rojo)
 

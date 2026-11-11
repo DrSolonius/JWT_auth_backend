@@ -985,7 +985,7 @@ La suite está organizada por nivel de prueba:
 ```text
 tests/
   conftest.py        # fixtures: session (SQLite en memoria), repository, service, client
-  unit/              # reglas aisladas (dominio y paginación con repositorio falso)
+  unit/              # reglas aisladas (dominio; servicio con repositorio falso y con mocks)
   integration/       # EstudianteService + EstudianteRepository con base de datos real de prueba
   api/               # endpoints HTTP con TestClient (estudiantes y autenticación)
 ```
