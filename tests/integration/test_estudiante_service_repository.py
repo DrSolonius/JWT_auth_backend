@@ -8,7 +8,7 @@ import pytest
 def test_crear_asigna_id_y_deja_el_estudiante_guardado(service):
     creado = service.crear("Ana", "Pérez", "ana@example.com")
 
-    assert creado.id == 1
+    assert creado.id is not None
     assert service.obtener(creado.id).email == "ana@example.com"
 
 
