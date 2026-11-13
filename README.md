@@ -991,7 +991,9 @@ tests/
 ```
 
 Los tests usan **PostgreSQL**, el mismo motor que la aplicación, en una base aparte: `clase_test`
-(la crea `db-init/01-crear-base-de-pruebas.sh` al levantar `docker compose up -d db`). Las tablas se crean una vez con
+(la crea `db-init/01-crear-base-de-pruebas.sh` al levantar `docker compose up -d db`).
+Sus credenciales no están en el código: salen de las variables `TEST_DB_*` de tu `.env` (cópialas de `.env.example`);
+en CI las define el workflow y la contraseña viene de un secret de GitHub (`TEST_DB_PASSWORD`). Las tablas se crean una vez con
 `alembic upgrade head` y se vacían después de cada test (`TRUNCATE ... RESTART IDENTITY`). Si el nombre de la base no
 termina en `_test`, los tests se niegan a correr. El `client` reemplaza `get_session` y `get_usuario_actual` con `app.dependency_overrides`.
 
