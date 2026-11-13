@@ -11,6 +11,8 @@ services:
       - "${DB_PORT_HOST:-5433}:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+      # Crea la base de pruebas (clase_test) la primera vez que se crea el volumen.
+      - ./db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 5s

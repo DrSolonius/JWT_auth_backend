@@ -24,11 +24,14 @@ Cada carpeta necesita su `__init__.py`. Los fixtures `session`, `repository`, `s
 ## Preparación
 
 ```bash
+docker compose up -d db          # PostgreSQL; crea también la base de pruebas clase_test
 uv sync --group dev
 uv run pytest
 ```
 
-Debes ver `59 passed` antes de empezar. No necesitas `.env` ni Docker: los tests usan una base SQLite en memoria (ver `tests/conftest.py`).
+Debes ver `59 passed` antes de empezar. Los tests usan la base `clase_test` del contenedor `db` (puerto 5433), separada de `clase`, la de la aplicación (ver `tests/conftest.py`). No necesitas `.env`.
+
+> Si ya tenías el volumen `pgdata` de antes, `clase_test` no existe todavía: créala con `docker compose exec db createdb -U alumno clase_test`.
 
 ## Parte 1 — Tests unitarios (rojo)
 
@@ -80,8 +83,8 @@ El proyecto parte con **98 %**. Usa la columna `Missing` para encontrar qué lí
 3. Captura del reporte de cobertura.
 4. Respuestas breves (máx. 5 líneas cada una):
    - ¿Qué valida un test unitario, uno de integración y uno de API? Da un ejemplo de esta actividad.
-   - ¿Por qué cada test recibe una `session` (base SQLite en memoria) nueva en lugar de compartir una?
-   - ¿Qué ventaja y qué riesgo tiene probar con SQLite si la aplicación usa PostgreSQL?
+   - ¿Por qué se vacían las tablas después de cada test en lugar de dejar que los datos se acumulen?
+   - ¿Qué ventaja tiene probar contra PostgreSQL real y qué costo tiene frente a una base falsa (necesita Docker, es más lento)?
    - ¿Qué mide la cobertura y qué no mide?
 
 ## Criterio de logro
