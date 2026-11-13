@@ -984,14 +984,16 @@ La suite está organizada por nivel de prueba:
 
 ```text
 tests/
-  conftest.py        # fixtures: session (SQLite en memoria), repository, service, client
+  conftest.py        # fixtures: session (PostgreSQL clase_test), repository, service, client
   unit/              # reglas aisladas (dominio; servicio con repositorio falso y con mocks)
   integration/       # EstudianteService + EstudianteRepository con base de datos real de prueba
   api/               # endpoints HTTP con TestClient (estudiantes y autenticación)
 ```
 
-Los tests **no usan PostgreSQL ni `.env`**: cada test recibe una base SQLite en memoria, nueva y con las mismas tablas
-(`Base.metadata.create_all`). El `client` reemplaza `get_session` y `get_usuario_actual` con `app.dependency_overrides`.
+Los tests usan **PostgreSQL**, el mismo motor que la aplicación, en una base aparte: `clase_test`
+(la crea `db-init/01-crear-base-de-pruebas.sh` al levantar `docker compose up -d db`). Las tablas se crean una vez con
+`alembic upgrade head` y se vacían después de cada test (`TRUNCATE ... RESTART IDENTITY`). Si el nombre de la base no
+termina en `_test`, los tests se niegan a correr. El `client` reemplaza `get_session` y `get_usuario_actual` con `app.dependency_overrides`.
 
 ```bash
 uv sync --group dev
