@@ -24,12 +24,13 @@ Cada carpeta necesita su `__init__.py`. Los fixtures `session`, `repository`, `s
 ## Preparación
 
 ```bash
+cp .env.example .env             # y completa TEST_DB_PASSWORD (y las demás claves)
 docker compose up -d db          # PostgreSQL; crea también la base de pruebas clase_test
 uv sync --group dev
 uv run pytest
 ```
 
-Debes ver `59 passed` antes de empezar. Los tests usan la base `clase_test` del contenedor `db` (puerto 5433), separada de `clase`, la de la aplicación (ver `tests/conftest.py`). No necesitas `.env`.
+Debes ver `59 passed` antes de empezar. Los tests usan la base `clase_test` del contenedor `db` (puerto 5433), separada de `clase`, la de la aplicación. Sus credenciales salen de las variables `TEST_DB_*` de tu `.env` (ver `tests/conftest.py`); si faltan, pytest se detiene y te dice cuáles.
 
 > Si ya tenías el volumen `pgdata` de antes, `clase_test` no existe todavía: créala con `docker compose exec db createdb -U alumno clase_test`.
 

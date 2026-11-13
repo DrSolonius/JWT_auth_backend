@@ -7,22 +7,35 @@ así ningún test depende del resultado de otro (independencia entre tests).
 """
 import os
 
-# infrastructure/database.py y security/config.py leen estas variables al
-# importarse. Deben existir ANTES de importar la aplicación. Por defecto
-# apuntan a la base de pruebas del docker-compose (puerto 5433, clase_test).
-# En CI se sobrescriben con las variables del servicio postgres.
-os.environ.setdefault("DB_USER", "alumno")
-os.environ.setdefault("DB_PASSWORD", "mi_clave_segura")
-os.environ.setdefault("DB_HOST", "localhost")
-os.environ.setdefault("DB_PORT", "5433")
-os.environ.setdefault("DB_NAME", "clase_test")
-os.environ.setdefault("JWT_SECRET", "secreto-solo-para-tests")
+from dotenv import load_dotenv
+
+# La base de pruebas se configura con variables TEST_DB_* propias, distintas de
+# las DB_* de la aplicación: así un .env con DB_NAME=clase nunca se mezcla con
+# los tests. Salen del entorno o del archivo .env (ver .env.example); en CI las
+# define el workflow, y la contraseña viene de un secret de GitHub.
+load_dotenv()
+
+_VARIABLES = ("USER", "PASSWORD", "HOST", "PORT", "NAME")
+_faltan = [f"TEST_DB_{v}" for v in _VARIABLES if not os.environ.get(f"TEST_DB_{v}")]
+if _faltan:
+    raise RuntimeError(
+        "Faltan variables para la base de pruebas: " + ", ".join(_faltan)
+        + ". Cópialas desde .env.example a tu .env (o defínelas en el entorno)."
+    )
+
+# infrastructure/database.py lee las DB_* al importarse: se fijan ANTES de
+# importar la aplicación y reemplazan a las de la app.
+for _v in _VARIABLES:
+    os.environ[f"DB_{_v}"] = os.environ[f"TEST_DB_{_v}"]
+
+# Valores que no son credenciales de ningún sistema real.
+os.environ.setdefault("JWT_SECRET", "secreto-solo-para-tests-de-al-menos-32-bytes")
 os.environ.setdefault("COOKIE_SECURE", "false")
 
 # Seguro de vida: los tests borran datos. Nunca deben correr contra "clase".
 if not os.environ["DB_NAME"].endswith("_test"):
     raise RuntimeError(
-        f"DB_NAME={os.environ['DB_NAME']!r}: los tests solo corren contra una "
+        f"TEST_DB_NAME={os.environ['DB_NAME']!r}: los tests solo corren contra una "
         "base cuyo nombre termine en '_test' (se vacía después de cada test)."
     )
 
