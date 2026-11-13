@@ -32,11 +32,30 @@ services:
       ACCESS_TOKEN_MINUTOS: ${ACCESS_TOKEN_MINUTOS:-15}
       REFRESH_TOKEN_DIAS: ${REFRESH_TOKEN_DIAS:-7}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      # Sin ADMIN_PASSWORD no se crea el administrador.
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@academico.test}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     ports:
       - "${APP_PORT:-8080}:8000"
     depends_on:
       db:
         condition: service_healthy
 
+  pgadmin:
+    image: dpage/pgadmin4:9
+    container_name: sistema_academico_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@example.com}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD:-admin}
+    ports:
+      # Solo desde tu PC: pgAdmin da acceso completo a la base de datos.
+      - "127.0.0.1:${PGADMIN_PORT:-5050}:80"
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   pgdata:
+  pgadmin_data:

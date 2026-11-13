@@ -975,3 +975,29 @@ Todavía no se incorporan:
 - CI/CD.
 
 El proyecto continuará evolucionando progresivamente durante el curso.
+
+---
+
+## Testing
+
+La suite está organizada por nivel de prueba:
+
+```text
+tests/
+  conftest.py        # fixtures: session (SQLite en memoria), repository, service, client
+  unit/              # reglas aisladas (dominio; servicio con repositorio falso y con mocks)
+  integration/       # EstudianteService + EstudianteRepository con base de datos real de prueba
+  api/               # endpoints HTTP con TestClient (estudiantes y autenticación)
+```
+
+Los tests **no usan PostgreSQL ni `.env`**: cada test recibe una base SQLite en memoria, nueva y con las mismas tablas
+(`Base.metadata.create_all`). El `client` reemplaza `get_session` y `get_usuario_actual` con `app.dependency_overrides`.
+
+```bash
+uv sync --group dev
+uv run pytest                                  # todos los tests
+uv run pytest tests/unit                       # solo un nivel
+uv run pytest --cov --cov-report=term-missing  # cobertura del módulo de estudiantes
+```
+
+La actividad de la clase está en `ACTIVIDAD_Semana11.md`.
